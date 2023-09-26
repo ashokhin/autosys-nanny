@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -28,7 +30,9 @@ var (
 	forceRestart      = app.Flag("force-restart", "Restart services even than they already running").Default("false").Bool()
 	listOnly          = app.Flag("list", "Only check services without restart and list them").Default("false").Bool()
 	propertyFile      = app.Flag("properties-file", "YAML file with services properties.").Default("./services.yaml").String()
+	logFile           = app.Flag("log", "Path to log file").Default("").String()
 	logger            log.Logger
+	supported_os      = []string{"linux"}
 )
 
 func printVersion() string {
@@ -41,11 +45,36 @@ func printVersion() string {
 	build_date:           %q`, appName, appVersion, appOrigin, appBranch, appRevision, appBuildUser, appBuildDate)
 }
 
+func checkOS() error {
+
+	if !slices.Contains(supported_os, runtime.GOOS) {
+		return fmt.Errorf("os %s unsupported", runtime.GOOS)
+	}
+
+	return nil
+}
+
 func init() {
+
+	if err := checkOS(); err != nil {
+		fmt.Printf("ERROR: %v\n", err)
+		os.Exit(1)
+	}
+
 	app.Version(printVersion())
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
-	logger = log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
+	if len(*logFile) == 0 {
+		logger = log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout))
+	} else {
+		logFileWriter, err := os.OpenFile(*logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			panic(fmt.Errorf("error open log file '%s'.\nerror: '%s'", *logFile, err.Error()))
+		} else {
+			logger = log.NewLogfmtLogger(log.NewSyncWriter(logFileWriter))
+		}
+
+	}
 
 	if *debug {
 		logger = level.NewFilter(logger, level.AllowDebug())
@@ -74,11 +103,12 @@ func main() {
 	if *listOnly {
 		checker.List()
 
+		level.Debug(logger).Log("msg", "list success", "elapsed_time", time.Since(timeStart))
 		return
 	}
 
 	checker.CheckAndRestart()
-	if checker.SendEmail() {
+	if checker.ReportErrors() {
 		level.Warn(logger).Log("msg", "checks completed with errors",
 			"elapsed_time", time.Since(timeStart))
 

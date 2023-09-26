@@ -11,10 +11,14 @@ services_list:
   - process_name: "service1.py"
     description: ""
     disabled: false
-    start_cmd: "/usr/bin/tail -f /tmp/service1.py"
+    start_cmd: "python3 service1.py"
+    cmd_args:
+      - "--firstArg=01"
+      - "--SecondArg 02"
     stop_cmd: "pkill -f service1.py"
-    pid_file: "service1.pid"
+    python_venv: "/opt/python/venv/service1"
     working_directory: "/tmp/"
+    pid_file: "service1.pid"
     env_vars:
       - "FIRST_SOME_VAR='Some value'"
       - "second_some_var=42"
@@ -23,31 +27,15 @@ services_list:
       - "carol@example.com"
 
   - process_name: "service2.py"
-    description: ""
-    disabled: true
-    start_cmd: "tail -f service2.py"
-    stop_cmd: "pkill -f service2.py"
-    pid_file: "service2.py.pid"
-    working_directory: "/tmp/"
-    mailing_list:
-      - "frank@example.com"
-      - "grace@example.com"
+    start_cmd: "/usr/bin/tail -f /tmp/service2.py"
 
   - process_name: "service3.sh"
     description: ""
-    disabled: false
+    disabled: true
     start_cmd: "./service3.sh"
     pid_file: ""
     working_directory: "/tmp/"
-    mailing_list:
-      - "grace@example.com"
 
   - process_name: ""
     description: "broken service without name"
-    disabled: false
-    start_cmd: "/usr/bin/tail -f /tmp/service1.py"
-    stop_cmd: "pkill -f service1.py"
-    pid_file: "service1.pid"
-    working_directory: "/tmp/"
-    mailing_list:
-      - "grace@example.com"
+    disabled: true

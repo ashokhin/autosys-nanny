@@ -25,6 +25,21 @@ type MailHeader struct {
 	contentType string
 }
 
+func (m *Mailer) CheckSettings() error {
+	if m.Headers == nil {
+		return &ErrBadMailSettings{"mail settings don't have 'mail_address_from' field"}
+	}
+
+	switch {
+	case len(m.SmtpServer) == 0:
+		return &ErrBadMailSettings{"mail settings don't have 'mail_smtp_server' value"}
+	case len(m.Headers.From) == 0:
+		return &ErrBadMailSettings{"mail settings don't have 'mail_address_from' field"}
+	}
+
+	return nil
+}
+
 // return array of formatted strings which look like:
 // "'%unitName%' %unitType% got error: %errorString%"
 func (m *Mailer) getErrorString(unitName string, unitType string, errors []*error) []string {
@@ -60,7 +75,7 @@ func (m *Mailer) getErrorsHtml(errorStrings []string) string {
 func (m *Mailer) SendHtmlEmail(unitName string, unitType string, errors []*error) error {
 	var err error
 
-	level.Debug(*m.Logger).Log("msg", "send HTML email with errors")
+	level.Debug(*m.Logger).Log("msg", "send html email with errors")
 	serviceErrorString := m.getErrorString(unitName, unitType, errors)
 	m.body = m.getErrorsHtml(serviceErrorString)
 
@@ -77,7 +92,6 @@ Content-Type: %s
 		"value", string(msg))
 
 	if err = smtp.SendMail(m.SmtpServer, smtpAuth, m.Headers.From, m.Headers.To, msg); err != nil {
-		fmt.Println("EEE:", err)
 		level.Error(*m.Logger).Log("msg", "got error when try to send email", "error", err.Error())
 	}
 

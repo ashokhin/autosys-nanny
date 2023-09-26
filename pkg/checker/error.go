@@ -11,33 +11,33 @@ func (e *ErrNoProcName) Error() string {
 }
 
 type ErrZeroPid struct {
-	message string
+	service string
 }
 
 func (e *ErrZeroPid) Error() string {
-	return fmt.Sprintf("Service '%s' stop failed. Service process PID = 0. Looks like service has already stopped", e.message)
+	return fmt.Sprintf("service '%s' stop failed. service process pid = 0. looks like service has already stopped", e.service)
 }
 
 type ErrNoStartCmd struct {
-	message string
+	service string
 }
 
 func (e *ErrNoStartCmd) Error() string {
-	return fmt.Sprintf("Service '%s' doesn't have start command in 'start_cmd' property", e.message)
+	return fmt.Sprintf("service '%s' start failed. service doesn't have start command in 'start_cmd' property", e.service)
 }
 
 type ErrNoPidFile struct {
-	message string
+	service string
 }
 
 func (e *ErrNoPidFile) Error() string {
-	return fmt.Sprintf("Service '%s' doesn't have PID file which path defined in 'pid_file' property", e.message)
+	return fmt.Sprintf("service '%s' doesn't have pid file which path defined in 'pid_file' property", e.service)
 }
 
 type ErrSrvRestartedForce struct {
-	message string
+	service string
 }
 
 func (e *ErrSrvRestartedForce) Error() string {
-	return fmt.Sprintf("Service '%s' restarted with key --force-restart", e.message)
+	return fmt.Sprintf("service '%s' restarted with key --force-restart", e.service)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/go-kit/log/level"
 
 	npf "github.com/ashokhin/autosys-nanny/pkg/file"
+	"github.com/ashokhin/autosys-nanny/pkg/mailer"
 )
 
 type Checker struct {
@@ -33,16 +34,16 @@ type Checker struct {
 func (c *Checker) loadYaml() error {
 	var err error
 
-	level.Debug(*c.logger).Log("msg", "load YAML file", "value", c.PropertiesFilePath)
+	level.Debug(*c.logger).Log("msg", "load yaml file", "value", c.PropertiesFilePath)
 
 	if err := npf.LoadYamlFile(c.PropertiesFilePath, &c.Config, *c.logger); err != nil {
-		level.Error(*c.logger).Log("msg", "error loading YAML file",
+		level.Error(*c.logger).Log("msg", "error loading yaml file",
 			"value", c.PropertiesFilePath, "error", err.Error())
 
 		return err
 	}
 
-	level.Debug(*c.logger).Log("msg", "YAML loaded")
+	level.Debug(*c.logger).Log("msg", "yaml loaded")
 
 	return err
 }
@@ -81,14 +82,14 @@ func (c *Checker) getProcessInfo(workerId int, chProcPath <-chan string, chResul
 				processPidStr, _ := strings.CutPrefix(line, "Pid:")
 
 				if process.Pid, err = strconv.Atoi(strings.Trim(processPidStr, "\t ")); err != nil {
-					level.Error(*c.logger).Log("msg", "can't convert Pid string to Int",
+					level.Error(*c.logger).Log("msg", "can't convert pid string to int",
 						"worker", workerId, "value", processPidStr, "error", err.Error())
 				}
 			case strings.HasPrefix(line, "PPid:"):
 				processPPidStr, _ := strings.CutPrefix(line, "PPid:")
 
 				if process.PPid, err = strconv.Atoi(strings.Trim(processPPidStr, "\t ")); err != nil {
-					level.Error(*c.logger).Log("msg", "can't convert PPid string to Int",
+					level.Error(*c.logger).Log("msg", "can't convert ppid string to Int",
 						"worker", workerId, "value", processPPidStr, "error", err.Error())
 				}
 			}
@@ -170,24 +171,24 @@ func (c *Checker) searchServicePid(service *Service) bool {
 		if strings.Contains(p.Cmdline, service.ProcessName) {
 			level.Debug(*c.logger).Log("msg", "service pid found in process list",
 				"service", service.ProcessName, "value", pid)
-			service.process = p
 
-			return true
+			if service.process != nil {
+				// search main pid (always lower number in process tree)
+				if service.process.Pid > p.Pid {
+					service.process = p
+				}
+			} else {
+				service.process = p
+			}
 		}
 	}
 
-	return false
+	return service.process != nil
 }
 
 func (c *Checker) checkService(service *Service, wg *sync.WaitGroup) error {
 	var err error
 	defer wg.Done()
-
-	if len(service.ProcessName) == 0 {
-		level.Warn(*c.logger).Log("msg", "'process_name' should contain value")
-
-		return &ErrNoProcName{}
-	}
 
 	level.Debug(*c.logger).Log("msg", "processing service",
 		"value", service.ProcessName)
@@ -222,10 +223,20 @@ func (c *Checker) collectData() error {
 
 	c.getProcessesList()
 
-	for _, service := range c.Config.Services {
-		wg.Add(1)
+	for sliceIndex, service := range c.Config.Services {
 		level.Debug(*c.logger).Log("msg", "run service checks",
 			"value", service.ProcessName)
+
+		if len(service.ProcessName) == 0 {
+			err = fmt.Errorf("services_list[%d].process_name should contain value", sliceIndex)
+
+			level.Error(*c.logger).Log("msg", "error load process details from yaml",
+				"error", err.Error())
+
+			continue
+		}
+
+		wg.Add(1)
 
 		go c.checkService(service, &wg)
 	}
@@ -241,10 +252,9 @@ func (c *Checker) NewLogger(logger *log.Logger) {
 
 func (c *Checker) List() {
 	if err := c.collectData(); err != nil {
-		level.Error(*c.logger).Log("msg", "got error when try to collect data",
+		level.Warn(*c.logger).Log("msg", "got error when try to collect data",
 			"error", err.Error())
 
-		os.Exit(1)
 	}
 
 	// create tabWriter output filter
@@ -274,8 +284,6 @@ func (c *Checker) CheckAndRestart() {
 
 	if err := c.collectData(); err != nil {
 		c.checkerErrorArray = append(c.checkerErrorArray, &err)
-
-		return
 	}
 
 	for _, service := range c.Config.Services {
@@ -287,23 +295,28 @@ func (c *Checker) CheckAndRestart() {
 		}
 
 		if (service.process == nil) || c.ForceRestart {
-
 			service.RestartProcess(c.ForceRestart)
 		}
 
 		if (service.process != nil) && (service.Disabled) {
-
 			service.RestartProcess(c.ForceRestart)
 		}
 	}
 }
 
-func (c *Checker) SendEmail() bool {
+func (c *Checker) ReportErrors() bool {
 	var gotErrors bool
 
-	c.Config.Mailer.Logger = c.logger
-	// save mailing_list form YAML key 'general.mailing_list' before processing services
-	c.Config.to = c.Config.Mailer.Headers.To
+	if c.Config.Mailer != nil {
+		c.Config.Mailer.Logger = c.logger
+
+		if c.Config.Mailer.Headers != nil {
+			// save mailing_list form YAML key 'general.mailing_list' before processing services
+			c.Config.to = c.Config.Mailer.Headers.To
+		}
+	} else {
+		c.Config.Mailer = new(mailer.Mailer)
+	}
 
 	for _, s := range c.Config.Services {
 
@@ -314,8 +327,26 @@ func (c *Checker) SendEmail() bool {
 			}
 			// add service's errors to global array
 			c.AllErrorsArray = append(c.AllErrorsArray, s.errorArray...)
+
+			if len(s.MailList) == 0 {
+				level.Debug(*c.logger).Log("msg", "service doesn't have 'mailing_list'. skip sending emails",
+					"service", s.ProcessName)
+
+				continue
+			}
+
+			if err := c.Config.Mailer.CheckSettings(); err != nil {
+				level.Warn(*c.logger).Log("msg", "checker mail config inconsistent. skip sending emails",
+					"service", s.ProcessName, "error", err)
+
+				c.AllErrorsArray = append(c.AllErrorsArray, &err)
+
+				continue
+			}
+
 			c.Config.Mailer.Headers.To = s.MailList
 			c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | %s restarted", strings.ToUpper(c.hostname), s.ProcessName)
+
 			if err := c.Config.Mailer.SendHtmlEmail(s.ProcessName, "service", s.errorArray); err != nil {
 				c.AllErrorsArray = append(c.AllErrorsArray, &err)
 			}
@@ -326,15 +357,31 @@ func (c *Checker) SendEmail() bool {
 		gotErrors = true
 
 		for _, e := range c.checkerErrorArray {
-			level.Error(*c.logger).Log("msg", "checker got errors", "error", e)
+			level.Error(*c.logger).Log("msg", "nanny script got errors", "error", e)
 			c.AllErrorsArray = append(c.AllErrorsArray, e)
 		}
 	}
 
 	if len(c.AllErrorsArray) > 0 {
 		// turn back mailing_list form YAML key 'general.mailing_list' after processing services
+		if len(c.Config.to) == 0 {
+			level.Debug(*c.logger).Log("msg", "nanny script doesn't have 'mailing_list'.  skip sending emails")
+
+			return gotErrors
+		}
+
+		if err := c.Config.Mailer.CheckSettings(); err != nil {
+			level.Warn(*c.logger).Log("msg", "nanny script mail config inconsistent. skip sending emails",
+				"error", err)
+
+			c.AllErrorsArray = append(c.AllErrorsArray, &err)
+
+			return gotErrors
+		}
+
 		c.Config.Mailer.Headers.To = c.Config.to
 		c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | Nanny script got errors", strings.ToUpper(c.hostname))
+
 		if err := c.Config.Mailer.SendHtmlEmail("Nanny", "script", c.AllErrorsArray); err != nil {
 			c.AllErrorsArray = append(c.AllErrorsArray, &err)
 		}

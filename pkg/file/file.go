@@ -33,19 +33,19 @@ func LoadYamlFile(filePath string, out interface{}, logger log.Logger) error {
 	var err error
 	var f []byte
 
-	level.Debug(logger).Log("msg", "read YAML file", "value", filePath)
+	level.Debug(logger).Log("msg", "read yaml file", "value", filePath)
 
 	if err := fileExists(filePath); err != nil {
 		var isDirErr *ErrIsDir
 
 		if os.IsNotExist(err) {
-			level.Error(logger).Log("msg", "YAML file does not exists", "value", filePath, "error", err.Error())
+			level.Error(logger).Log("msg", "yaml file does not exists", "value", filePath, "error", err.Error())
 
 			return err
 		}
 
 		if errors.As(err, &isDirErr) {
-			level.Error(logger).Log("msg", "YAML path is not a file", "value", filePath, "error", err.Error())
+			level.Error(logger).Log("msg", "yaml path is not a file", "value", filePath, "error", err.Error())
 
 			return err
 		}
@@ -60,7 +60,7 @@ func LoadYamlFile(filePath string, out interface{}, logger log.Logger) error {
 	}
 
 	if err := yaml.Unmarshal(f, out); err != nil {
-		level.Error(logger).Log("msg", "error unmarshal YAML configuration", "error", err.Error())
+		level.Error(logger).Log("msg", "error unmarshal yaml configuration", "error", err.Error())
 
 		return err
 	}

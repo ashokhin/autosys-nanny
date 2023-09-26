@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-kit/log"
@@ -17,7 +18,9 @@ type Service struct {
 	Description  string   `yaml:"description"`
 	Disabled     bool     `yaml:"disabled"`
 	StartCmd     string   `yaml:"start_cmd"`
+	CmdArgs      []string `yaml:"cmd_args"`
 	StopCmd      string   `yaml:"stop_cmd"`
+	PythonVEnv   string   `yaml:"python_venv"`
 	WorkingDir   string   `yaml:"working_directory"`
 	PidFile      string   `yaml:"pid_file"`
 	EnvList      []string `yaml:"env_vars"`
@@ -40,13 +43,13 @@ func (s *Service) deletePidFile() {
 	var err error
 
 	if len(s.PidFile) == 0 {
-		level.Debug(*s.Logger).Log("msg", "service doesn't have PID file path in 'pid_file' property",
+		level.Debug(*s.Logger).Log("msg", "service doesn't have pid file path in 'pid_file' property",
 			"value", s.ProcessName)
 
 		return
 	}
 
-	level.Debug(*s.Logger).Log("msg", "search PID file for service", "value", s.ProcessName)
+	level.Debug(*s.Logger).Log("msg", "search pid file for service", "value", s.ProcessName)
 
 	matches, err := filepath.Glob(fmt.Sprintf("./%s", s.PidFile))
 
@@ -61,7 +64,7 @@ func (s *Service) deletePidFile() {
 			"value", f)
 
 		if err := os.Remove(f); err != nil {
-			level.Error(*s.Logger).Log("msg", "got error when try to delete PID file",
+			level.Error(*s.Logger).Log("msg", "got error when try to delete pid file",
 				"service", s.ProcessName, "value", f, "error", err.Error())
 
 			s.errorArray = append(s.errorArray, &err)
@@ -113,7 +116,7 @@ func (s *Service) stop() error {
 
 	if len(s.StopCmd) > 0 {
 		// if stop command present than exec stop command
-		level.Info(*s.Logger).Log("msg", "execute stop command for service",
+		level.Debug(*s.Logger).Log("msg", "execute stop command for service",
 			"service", s.ProcessName, "value", s.StopCmd)
 
 		cmd := exec.Command("bash", "-c", s.StopCmd)
@@ -121,13 +124,13 @@ func (s *Service) stop() error {
 		level.Debug(*s.Logger).Log("msg", "stop command", "value", cmd.String())
 
 		if err := cmd.Run(); err != nil {
-			level.Error(*s.Logger).Log("msg", "got error when try to stop command",
+			level.Error(*s.Logger).Log("msg", "got error when try to execute stop command",
 				"value", cmd.String(), "error", err.Error())
 		}
 	} else {
 		// else kill process with 'syscall.SIGKILL' signal
-		level.Info(*s.Logger).Log("msg", "execute kill process for service",
-			"service", s.ProcessName, "value", "syscall.SIGKILL")
+		level.Debug(*s.Logger).Log("msg", "service doesn't have 'stop_cmd'. execute kill process for service",
+			"service", s.ProcessName, "value", "syscall.sigkill")
 
 		err = s.kill()
 	}
@@ -155,11 +158,33 @@ func (s *Service) start() error {
 		return &ErrNoStartCmd{s.ProcessName}
 	}
 
-	cmd := exec.Command("bash", "-c", s.StartCmd, "&")
+	if len(s.PythonVEnv) > 0 {
+		if strings.HasPrefix(s.StartCmd, "python") {
+
+			s.StartCmd = fmt.Sprintf("%s/bin/%s", s.PythonVEnv, s.StartCmd)
+			level.Info(*s.Logger).Log("msg", "add 'python_venv' to 'start_cmd'",
+				"python_venv", s.PythonVEnv, "value", s.StartCmd)
+		} else {
+			level.Warn(*s.Logger).Log("msg", "error add 'python_venv' to 'start_cmd'",
+				"error", "for using python virtual environment 'start_cmd' should be started from 'python' word")
+		}
+	}
+
+	// version with bash
+	if len(s.CmdArgs) > 0 {
+		s.StartCmd = fmt.Sprintf("%s %s", s.StartCmd, strings.Join(s.CmdArgs, " "))
+
+		level.Debug(*s.Logger).Log("msg", "add 'cmd_args' to 'start_cmd'", "cmd_args", fmt.Sprintf("%v", s.CmdArgs), "value", s.StartCmd)
+	}
+
+	cmd := exec.Command("bash", "-c", s.StartCmd)
+
+	// version without bash
+	//cmd := exec.Command(s.StartCmd, s.CmdArgs...)
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, s.EnvList...)
 
-	level.Info(*s.Logger).Log("msg", "execute start command",
+	level.Debug(*s.Logger).Log("msg", "execute start command",
 		"service", s.ProcessName, "value", fmt.Sprintf("%+v", cmd.String()))
 	level.Debug(*s.Logger).Log("msg", "environment variables",
 		"service", s.ProcessName, "value", fmt.Sprintf("%s", cmd.Env))
@@ -167,6 +192,8 @@ func (s *Service) start() error {
 	if err := cmd.Start(); err != nil {
 		level.Error(*s.Logger).Log("msg", "got error when try to start command",
 			"service", s.ProcessName, "value", cmd.String(), "error", err.Error())
+
+		s.errorArray = append(s.errorArray, &err)
 	}
 
 	if err == nil && s.forceRestart {
@@ -217,8 +244,16 @@ func (s *Service) RestartProcess(forceRestart bool) error {
 	}
 
 	if err := s.start(); err != nil {
-		level.Error(*s.Logger).Log("msg", "got error when try to start service",
-			"value", s.ProcessName, "error", err.Error())
+		var errSrvRestartedForce *ErrSrvRestartedForce
+
+		if errors.As(err, &errSrvRestartedForce) {
+			level.Warn(*s.Logger).Log("msg", "got warning when try to start service",
+				"value", s.ProcessName, "error", err.Error())
+
+		} else {
+			level.Error(*s.Logger).Log("msg", "got error when try to start service",
+				"value", s.ProcessName, "error", err.Error())
+		}
 
 		s.errorArray = append(s.errorArray, &err)
 		return err
