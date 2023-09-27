@@ -25,14 +25,14 @@ var (
 	appBuildUser      = "nobody"
 	appBuildDate      = "None"
 	app               = kingpin.New("autosys-nanny", "A command-line tool for managing services defined in yaml configuration file.")
-	concurrentWorkers = app.Flag("workers-num", "Maximum number of concurrent workers for processing services").Default("100").Int()
-	debug             = app.Flag("debug", "Enable debug mode.").Default("false").Bool()
-	forceRestart      = app.Flag("force-restart", "Restart services even than they already running").Default("false").Bool()
-	listOnly          = app.Flag("list", "Only check services without restart and list them").Default("false").Bool()
-	propertyFile      = app.Flag("properties-file", "YAML file with services properties.").Default("./services.yaml").String()
-	logFile           = app.Flag("log", "Path to log file").Default("").String()
-	logger            log.Logger
+	concurrentWorkers = app.Flag("workers-num", "Maximum number of concurrent workers for processing services").Short('w').Default("100").Int()
+	debug             = app.Flag("debug", "Enable debug mode.").Short('v').Default("false").Bool()
+	forceRestart      = app.Flag("force-restart", "Restart services even than they already running").Short('r').Default("false").Bool()
+	listOnly          = app.Flag("list", "Only check services without restart and list them").Short('l').Default("false").Bool()
+	propertyFile      = app.Flag("config", "YAML file with services properties.").Short('c').Default("./services.yaml").String()
+	logFile           = app.Flag("log-file", "Path to log file").Short('f').Default("").String()
 	supported_os      = []string{"linux"}
+	logger            log.Logger
 )
 
 func printVersion() string {
