@@ -228,10 +228,11 @@ func (c *Checker) collectData() error {
 			"value", service.ProcessName)
 
 		if len(service.ProcessName) == 0 {
-			err = fmt.Errorf("services_list[%d].process_name should contain value", sliceIndex)
+			procErr := fmt.Errorf("services_list[%d].process_name should contain value", sliceIndex)
+			c.checkerErrorArray = append(c.checkerErrorArray, &procErr)
 
 			level.Error(*c.logger).Log("msg", "error load process details from yaml",
-				"error", err.Error())
+				"error", procErr.Error())
 
 			continue
 		}
@@ -250,11 +251,14 @@ func (c *Checker) NewLogger(logger *log.Logger) {
 	c.logger = logger
 }
 
-func (c *Checker) List() {
+func (c *Checker) List() error {
 	if err := c.collectData(); err != nil {
 		level.Warn(*c.logger).Log("msg", "got error when try to collect data",
 			"error", err.Error())
 
+		c.checkerErrorArray = append(c.checkerErrorArray, &err)
+
+		return err
 	}
 
 	// create tabWriter output filter
@@ -278,12 +282,16 @@ func (c *Checker) List() {
 		}
 	}
 	w.Flush()
+
+	return nil
 }
 
-func (c *Checker) CheckAndRestart() {
+func (c *Checker) CheckAndRestart() error {
 
 	if err := c.collectData(); err != nil {
 		c.checkerErrorArray = append(c.checkerErrorArray, &err)
+
+		return err
 	}
 
 	for _, service := range c.Config.Services {
@@ -302,6 +310,8 @@ func (c *Checker) CheckAndRestart() {
 			service.RestartProcess(c.ForceRestart)
 		}
 	}
+
+	return nil
 }
 
 func (c *Checker) ReportErrors() bool {
