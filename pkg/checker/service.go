@@ -116,6 +116,7 @@ func (s *Service) stop() error {
 
 		if s.Disabled {
 			level.Debug(*s.Logger).Log("msg", "service disabled and has already stopped", "value", s.ProcessName)
+
 			return nil
 		}
 
@@ -208,6 +209,8 @@ func (s *Service) start() error {
 		err = &ErrSvcRestartedForce{s.ProcessName}
 	}
 
+	err = fmt.Errorf("service '%s' was stopped and now started", s.ProcessName)
+
 	return err
 }
 
@@ -241,7 +244,7 @@ func (s *Service) RestartProcess(forceRestart bool) error {
 			level.Warn(*s.Logger).Log("msg", "service has already stopped",
 				"value", s.ProcessName, "error", err.Error())
 
-			s.errorArray = append(s.errorArray, &err)
+			// s.errorArray = append(s.errorArray, &err)
 		} else {
 			level.Error(*s.Logger).Log("msg", "got error when try to stop service",
 				"value", s.ProcessName, "error", err.Error())
