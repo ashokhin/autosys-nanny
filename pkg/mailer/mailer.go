@@ -31,6 +31,8 @@ type MailHeader struct {
 	Subject     string
 }
 
+const MAIL_DEFAULT_CONTENT_TYPE string = "text/plain; charset=utf-8"
+
 func (h *MailHeader) String() string {
 	return fmt.Sprintf("%+v", *h)
 }
@@ -85,6 +87,19 @@ func (m *Mailer) getErrorString(unitName string, unitType string, errors []*erro
 	return errorString
 }
 
+func (m *Mailer) getErrorsBody(errorsStringArray []string) string {
+	var mailBody string
+
+	switch {
+	case strings.Contains(m.Headers.ContentType, "text/plain"):
+		mailBody = strings.Join(errorsStringArray, "\n")
+	case strings.Contains(m.Headers.ContentType, "text/html"):
+		mailBody = m.getErrorsHtml(errorsStringArray)
+	}
+
+	return mailBody
+}
+
 func (m *Mailer) getErrorsHtml(errorStrings []string) string {
 	var htmlBody string
 
@@ -108,16 +123,17 @@ func (m *Mailer) SendHtmlEmail(unitName string, unitType string, errors []*error
 	var smtpAuth smtp.Auth
 
 	level.Debug(*m.Logger).Log("msg", "send html email with errors")
-	serviceErrorString := m.getErrorString(unitName, unitType, errors)
-	m.body = m.getErrorsHtml(serviceErrorString)
 
 	if len(m.Headers.ContentType) == 0 {
-		m.Headers.ContentType = "text/html; charset=utf-8"
+		m.Headers.ContentType = MAIL_DEFAULT_CONTENT_TYPE
 	}
 
 	if len(m.MailUser) > 0 && m.passwordRunes != nil {
 		smtpAuth = smtp.PlainAuth("", m.MailUser, string(m.passwordRunes), strings.Split(m.SmtpServer, ":")[0])
 	}
+
+	serviceErrorString := m.getErrorString(unitName, unitType, errors)
+	m.body = m.getErrorsBody(serviceErrorString)
 
 	// Prepare message as RFC-822 formatted
 	msg := []byte(fmt.Sprintf(`Subject: %s

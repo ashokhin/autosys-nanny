@@ -400,8 +400,6 @@ func (c *Checker) ReportErrors() bool {
 		c.Config.Mailer.Headers.To = c.Config.to
 		c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | Nanny script got errors", strings.ToUpper(c.hostname))
 
-		c.AllErrorsArray = append(c.AllErrorsArray, c.checkerErrorArray...)
-
 		if err := c.Config.Mailer.SendHtmlEmail("Nanny", "script", c.checkerErrorArray); err != nil {
 			c.AllErrorsArray = append(c.AllErrorsArray, &err)
 		}
