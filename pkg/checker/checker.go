@@ -339,6 +339,7 @@ func (c *Checker) ReportErrors() bool {
 
 	for _, s := range c.Config.Services {
 
+		// report about errors in services
 		if len(s.errorArray) > 0 {
 			gotErrors = true
 			for _, e := range s.errorArray {
@@ -379,10 +380,7 @@ func (c *Checker) ReportErrors() bool {
 			level.Error(*c.logger).Log("msg", "nanny script got errors", "error", e)
 			c.AllErrorsArray = append(c.AllErrorsArray, e)
 		}
-	}
 
-	if len(c.AllErrorsArray) > 0 {
-		// turn back mailing_list form YAML key 'general.mailing_list' after processing services
 		if len(c.Config.to) == 0 {
 			level.Debug(*c.logger).Log("msg", "nanny script doesn't have 'mailing_list'.  skip sending emails")
 
@@ -398,10 +396,13 @@ func (c *Checker) ReportErrors() bool {
 			return gotErrors
 		}
 
+		// switch back to global 'mailing_list'
 		c.Config.Mailer.Headers.To = c.Config.to
 		c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | Nanny script got errors", strings.ToUpper(c.hostname))
 
-		if err := c.Config.Mailer.SendHtmlEmail("Nanny", "script", c.AllErrorsArray); err != nil {
+		c.AllErrorsArray = append(c.AllErrorsArray, c.checkerErrorArray...)
+
+		if err := c.Config.Mailer.SendHtmlEmail("Nanny", "script", c.checkerErrorArray); err != nil {
 			c.AllErrorsArray = append(c.AllErrorsArray, &err)
 		}
 	}
