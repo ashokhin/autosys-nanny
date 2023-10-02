@@ -122,10 +122,7 @@ func main() {
 	}
 
 	if err := checker.CheckAndRestart(); err != nil {
-		fmt.Println(err.Error())
-
 		printCheckerErrorsAndExit(&checker, timeStart)
-
 	}
 
 	if checker.ReportErrors() {
@@ -133,6 +130,5 @@ func main() {
 	}
 
 	level.Info(logger).Log("msg", "checks success", "elapsed_time", time.Since(timeStart))
-
 	os.Exit(0)
 }

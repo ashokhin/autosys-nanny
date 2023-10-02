@@ -3,11 +3,13 @@ general:
   mail_auth_user: "alice@example.com"
   mail_auth_password: "alice_password"
   mail_address_from: "bob@example.com"
+  mail_content_type: "text/html; charset=utf-8"
   mailing_list:
     - "carol@example.com"
     - "dave@example.com"
 
 services_list:
+# All service options
   - process_name: "service1.py"
     description: ""
     disabled: false
@@ -26,16 +28,16 @@ services_list:
     mailing_list:
       - "carol@example.com"
 
+# Minimum for correct service
   - process_name: "service2.py"
     start_cmd: "/usr/bin/tail -f /tmp/service2.py"
 
+# Disabled service example
   - process_name: "service3.sh"
-    description: ""
     disabled: true
     start_cmd: "./service3.sh"
-    pid_file: ""
-    working_directory: "/tmp/"
 
+# Incorrect service example
   - process_name: ""
-    description: "broken service without name"
+    description: "wrong service without 'process_name' and 'start_cmd'"
     disabled: true

@@ -23,11 +23,16 @@ type Checker struct {
 	Config             *CheckerConfig
 	ConcurrentWorkers  int
 	ForceRestart       bool
-	processesList      map[int]*Process
 	checkerErrorArray  []*error
 	AllErrorsArray     []*error
 	hostname           string
 	logger             *log.Logger
+}
+
+var processesList map[int]*Process
+
+func (c *Checker) String() string {
+	return fmt.Sprintf("%+v", *c)
 }
 
 // load YAML file from Checker.PropertiesFilePath into Checker.Config
@@ -41,6 +46,10 @@ func (c *Checker) loadYaml() error {
 			"value", c.PropertiesFilePath, "error", err.Error())
 
 		return err
+	}
+
+	if c.Config.Mailer != nil {
+		c.Config.Mailer.SafeStorePassword()
 	}
 
 	level.Debug(*c.logger).Log("msg", "yaml loaded")
@@ -107,7 +116,7 @@ func (c *Checker) getProcessInfo(workerId int, chProcPath <-chan string, chResul
 			continue
 		}
 
-		// replace 'null' (\u0000) byte by 'space' (\u0020)
+		// replace 'null' (\u0000) UTF-8 symbol by 'space' (" ")
 		cmdlineString := strings.Replace(string(cmdLineBytes), "\u0000", " ", -1)
 		process.Cmdline = strings.TrimRight(cmdlineString, "\t ")
 
@@ -120,7 +129,7 @@ func (c *Checker) getProcessInfo(workerId int, chProcPath <-chan string, chResul
 
 func (c *Checker) getProcessesList() {
 	// init processes map
-	c.processesList = make(map[int]*Process)
+	processesList = make(map[int]*Process)
 	// search proc paths with PIDs
 	matches, _ := filepath.Glob("/proc/[0-9]*")
 
@@ -151,13 +160,13 @@ func (c *Checker) getProcessesList() {
 		process := <-chResult
 
 		if process.Pid != 0 {
-			c.processesList[process.Pid] = &process
+			processesList[process.Pid] = &process
 		}
 	}
 
-	if len(matches) != len(c.processesList) {
+	if len(matches) != len(processesList) {
 		level.Warn(*c.logger).Log("msg", "len(matches) != len(c.processes)",
-			"matches", len(matches), "processes", len(c.processesList))
+			"matches", len(matches), "processes", len(processesList))
 	}
 }
 
@@ -166,7 +175,7 @@ func (c *Checker) searchServicePid(service *Service) bool {
 	level.Debug(*c.logger).Log("msg", "search service pid",
 		"value", service.ProcessName)
 
-	for pid, p := range c.processesList {
+	for pid, p := range processesList {
 
 		if strings.Contains(p.Cmdline, service.ProcessName) {
 			level.Debug(*c.logger).Log("msg", "service pid found in process list",

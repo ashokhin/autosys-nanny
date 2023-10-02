@@ -31,12 +31,20 @@ type Service struct {
 	Logger       *log.Logger
 }
 
+func (s *Service) String() string {
+	return fmt.Sprintf("%+v", *s)
+}
+
 type Process struct {
 	Cmd     string
 	Cmdline string
 	Pid     int
 	PPid    int
 	ModTime time.Time
+}
+
+func (p *Process) String() string {
+	return fmt.Sprintf("%+v", *p)
 }
 
 func (s *Service) deletePidFile() {
@@ -197,7 +205,7 @@ func (s *Service) start() error {
 	}
 
 	if err == nil && s.forceRestart {
-		err = &ErrSrvRestartedForce{s.ProcessName}
+		err = &ErrSvcRestartedForce{s.ProcessName}
 	}
 
 	return err
@@ -244,7 +252,7 @@ func (s *Service) RestartProcess(forceRestart bool) error {
 	}
 
 	if err := s.start(); err != nil {
-		var errSrvRestartedForce *ErrSrvRestartedForce
+		var errSrvRestartedForce *ErrSvcRestartedForce
 
 		if errors.As(err, &errSrvRestartedForce) {
 			level.Warn(*s.Logger).Log("msg", "got warning when try to start service",
