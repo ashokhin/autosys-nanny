@@ -375,7 +375,7 @@ func (c *Checker) ReportErrors() bool {
 
 			c.Config.Mailer.Headers.To = s.MailList
 
-			c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | '%s' alert restarted", subjectPrefix, s.ProcessName)
+			c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | '%s' alert - restarted", subjectPrefix, s.ProcessName)
 
 			if err := c.Config.Mailer.SendHtmlEmail(s.errorArray); err != nil {
 				c.AllErrorsArray = append(c.AllErrorsArray, &err)
