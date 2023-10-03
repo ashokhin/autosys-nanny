@@ -237,7 +237,7 @@ func (c *Checker) collectData() error {
 			"value", service.ProcessName)
 
 		if len(service.ProcessName) == 0 {
-			procErr := fmt.Errorf("services_list[%d].process_name should contain value", sliceIndex)
+			procErr := fmt.Errorf("'Nanny' script error: services_list[%d].process_name should contain value", sliceIndex)
 			c.checkerErrorArray = append(c.checkerErrorArray, &procErr)
 
 			level.Error(*c.logger).Log("msg", "error load process details from yaml",
@@ -265,7 +265,9 @@ func (c *Checker) List() error {
 		level.Warn(*c.logger).Log("msg", "got error when try to collect data",
 			"error", err.Error())
 
-		c.checkerErrorArray = append(c.checkerErrorArray, &err)
+		err1 := fmt.Errorf("'Nanny' script error: %s", err.Error())
+
+		c.checkerErrorArray = append(c.checkerErrorArray, &err1)
 
 		return err
 	}
@@ -298,7 +300,8 @@ func (c *Checker) List() error {
 func (c *Checker) CheckAndRestart() error {
 
 	if err := c.collectData(); err != nil {
-		c.checkerErrorArray = append(c.checkerErrorArray, &err)
+		err1 := fmt.Errorf("'Nanny' script error: %s", err.Error())
+		c.checkerErrorArray = append(c.checkerErrorArray, &err1)
 
 		return err
 	}
@@ -326,12 +329,18 @@ func (c *Checker) CheckAndRestart() error {
 func (c *Checker) ReportErrors() bool {
 	var gotErrors bool
 
+	subjectPrefix := strings.ToUpper(c.hostname)
+
 	if c.Config.Mailer != nil {
 		c.Config.Mailer.Logger = c.logger
 
 		if c.Config.Mailer.Headers != nil {
 			// save mailing_list form YAML key 'general.mailing_list' before processing services
 			c.Config.to = c.Config.Mailer.Headers.To
+		}
+
+		if len(c.Config.Mailer.SubjectPrefix) > 0 {
+			subjectPrefix = c.Config.Mailer.SubjectPrefix
 		}
 	} else {
 		c.Config.Mailer = new(mailer.Mailer)
@@ -365,9 +374,10 @@ func (c *Checker) ReportErrors() bool {
 			}
 
 			c.Config.Mailer.Headers.To = s.MailList
-			c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | %s restarted", strings.ToUpper(c.hostname), s.ProcessName)
 
-			if err := c.Config.Mailer.SendHtmlEmail(s.ProcessName, "service", s.errorArray); err != nil {
+			c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | '%s' alert restarted", subjectPrefix, s.ProcessName)
+
+			if err := c.Config.Mailer.SendHtmlEmail(s.errorArray); err != nil {
 				c.AllErrorsArray = append(c.AllErrorsArray, &err)
 			}
 		}
@@ -398,9 +408,9 @@ func (c *Checker) ReportErrors() bool {
 
 		// switch back to global 'mailing_list'
 		c.Config.Mailer.Headers.To = c.Config.to
-		c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | Nanny script got errors", strings.ToUpper(c.hostname))
+		c.Config.Mailer.Headers.Subject = fmt.Sprintf("%s | Nanny script got errors", subjectPrefix)
 
-		if err := c.Config.Mailer.SendHtmlEmail("Nanny", "script", c.checkerErrorArray); err != nil {
+		if err := c.Config.Mailer.SendHtmlEmail(c.checkerErrorArray); err != nil {
 			c.AllErrorsArray = append(c.AllErrorsArray, &err)
 		}
 	}

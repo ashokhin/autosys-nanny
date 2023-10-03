@@ -3,6 +3,7 @@ general:
   mail_auth_user: "alice@example.com"
   mail_auth_password: "alice_password"
   mail_address_from: "bob@example.com"
+  mail_subject_prefix: "AutoSys Nanny"
   mail_content_type: "text/html; charset=utf-8"
   mailing_list:
     - "carol@example.com"

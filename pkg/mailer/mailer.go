@@ -1,6 +1,7 @@
 package mailer
 
 import (
+	"bytes"
 	"fmt"
 	"net/smtp"
 	"os"
@@ -14,6 +15,7 @@ type Mailer struct {
 	SmtpServer    string      `yaml:"mail_smtp_server"`
 	MailUser      string      `yaml:"mail_auth_user"`
 	MailPassword  string      `yaml:"mail_auth_password"`
+	SubjectPrefix string      `yaml:"mail_subject_prefix"`
 	Headers       *MailHeader `yaml:"general,inline"`
 	passwordRunes []rune      // most safe storage for password in memory
 	Logger        *log.Logger
@@ -31,7 +33,7 @@ type MailHeader struct {
 	Subject     string
 }
 
-const MAIL_DEFAULT_CONTENT_TYPE string = "text/plain; charset=utf-8"
+const MAIL_DEFAULT_CONTENT_TYPE string = `text/plain; charset="utf-8"`
 
 func (h *MailHeader) String() string {
 	return fmt.Sprintf("%+v", *h)
@@ -74,21 +76,25 @@ func (m *Mailer) CheckSettings() error {
 }
 
 // return array of formatted strings which look like:
-// "'%unitName%' %unitType% got error: %errorString%"
-func (m *Mailer) getErrorString(unitName string, unitType string, errors []*error) []string {
+// "Host '%hostname%' got error: %errorString%"
+func (m *Mailer) getErrorString(errorsStringArray []*error) []string {
 	var errorString []string
 
 	level.Debug(*m.Logger).Log("msg", "create array of strings with errors")
 
-	for _, e := range errors {
-		errorString = append(errorString, fmt.Sprintf("'%s' %s got error: %s\n", unitName, unitType, *e))
+	hostname, _ := os.Hostname()
+
+	for _, e := range errorsStringArray {
+		errorString = append(errorString, fmt.Sprintf("Host '%s' got error: %s\n", hostname, *e))
 	}
 
 	return errorString
 }
 
-func (m *Mailer) getErrorsBody(errorsStringArray []string) string {
+func (m *Mailer) getErrorsBody(errorsArray []*error) string {
 	var mailBody string
+
+	errorsStringArray := m.getErrorString(errorsArray)
 
 	switch {
 	case strings.Contains(m.Headers.ContentType, "text/plain"):
@@ -100,12 +106,12 @@ func (m *Mailer) getErrorsBody(errorsStringArray []string) string {
 	return mailBody
 }
 
-func (m *Mailer) getErrorsHtml(errorStrings []string) string {
+func (m *Mailer) getErrorsHtml(errorsStringArray []string) string {
 	var htmlBody string
 
 	level.Debug(*m.Logger).Log("msg", "create full html with errors")
 
-	for _, s := range errorStrings {
+	for _, s := range errorsStringArray {
 		htmlBody += fmt.Sprintf("		<br>%s\n", s)
 	}
 
@@ -118,7 +124,20 @@ func (m *Mailer) getErrorsHtml(errorStrings []string) string {
 </html>`, htmlBody)
 }
 
-func (m *Mailer) SendHtmlEmail(unitName string, unitType string, errors []*error) error {
+func (m *Mailer) buildEmail() []byte {
+	var buf bytes.Buffer
+
+	buf.WriteString(fmt.Sprintf("From: %s\n", m.Headers.From))
+	buf.WriteString(fmt.Sprintf("To: %s\n", strings.Join(m.Headers.To, ";")))
+	buf.WriteString(fmt.Sprintf("Subject: %s\n", m.Headers.Subject))
+	buf.WriteString(fmt.Sprintf("Content-Type: %s\n", m.Headers.ContentType))
+	buf.WriteString(fmt.Sprintf("\n%s", m.body))
+
+	return buf.Bytes()
+
+}
+
+func (m *Mailer) SendHtmlEmail(errors []*error) error {
 	var err error
 	var smtpAuth smtp.Auth
 
@@ -132,14 +151,11 @@ func (m *Mailer) SendHtmlEmail(unitName string, unitType string, errors []*error
 		smtpAuth = smtp.PlainAuth("", m.MailUser, string(m.passwordRunes), strings.Split(m.SmtpServer, ":")[0])
 	}
 
-	serviceErrorString := m.getErrorString(unitName, unitType, errors)
-	m.body = m.getErrorsBody(serviceErrorString)
+	m.body = m.getErrorsBody(errors)
 
 	// Prepare message as RFC-822 formatted
-	msg := []byte(fmt.Sprintf(`Subject: %s
-Content-Type: %s
+	msg := m.buildEmail()
 
-%s`, m.Headers.Subject, m.Headers.ContentType, m.body))
 	level.Debug(*m.Logger).Log("msg", "send email", "server", m.SmtpServer,
 		"from", m.Headers.From, "to", fmt.Sprintf("%+v", m.Headers.To),
 		"value", string(msg))

@@ -171,7 +171,7 @@ func (s *Service) start() error {
 		if strings.HasPrefix(s.StartCmd, "python") {
 
 			s.StartCmd = fmt.Sprintf("%s/bin/%s", s.PythonVEnv, s.StartCmd)
-			level.Info(*s.Logger).Log("msg", "add 'python_venv' to 'start_cmd'",
+			level.Debug(*s.Logger).Log("msg", "add 'python_venv' to 'start_cmd'",
 				"python_venv", s.PythonVEnv, "value", s.StartCmd)
 		} else {
 			level.Warn(*s.Logger).Log("msg", "error add 'python_venv' to 'start_cmd'",
@@ -203,13 +203,14 @@ func (s *Service) start() error {
 			"service", s.ProcessName, "value", cmd.String(), "error", err.Error())
 
 		s.errorArray = append(s.errorArray, &err)
+	} else {
+		err1 := fmt.Errorf("service '%s' was stopped and now started. Start command: '%s'", s.ProcessName, s.StartCmd)
+		s.errorArray = append(s.errorArray, &err1)
 	}
 
 	if err == nil && s.forceRestart {
 		err = &ErrSvcRestartedForce{s.ProcessName}
 	}
-
-	err = fmt.Errorf("service '%s' was stopped and now started", s.ProcessName)
 
 	return err
 }
@@ -241,7 +242,7 @@ func (s *Service) RestartProcess(forceRestart bool) error {
 		var errZeroPid *ErrZeroPid
 
 		if errors.As(err, &errZeroPid) {
-			level.Warn(*s.Logger).Log("msg", "service has already stopped",
+			level.Warn(*s.Logger).Log("msg", "got error when try to stop service",
 				"value", s.ProcessName, "error", err.Error())
 
 			// s.errorArray = append(s.errorArray, &err)
