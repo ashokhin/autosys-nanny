@@ -66,7 +66,15 @@ func (c *Checker) getProcessInfo(workerId int, chProcPath <-chan string, chResul
 		level.Debug(*c.logger).Log("msg", "collect data from proc path",
 			"worker", workerId, "value", procPath)
 
-		fstat, _ := os.Stat(procPath)
+		fstat, err := os.Stat(procPath)
+
+		if err != nil {
+			level.Warn(*c.logger).Log("msg", "process disappeared",
+				"worker", workerId, "value", procPath, "error", err.Error())
+
+			continue
+		}
+
 		process.ModTime = fstat.ModTime()
 
 		f, err := os.Open(fmt.Sprintf("%s/status", procPath))
