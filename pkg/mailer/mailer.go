@@ -19,7 +19,6 @@ type Mailer struct {
 	Headers       *MailHeader `yaml:"general,inline"`
 	passwordRunes []rune      // most safe storage for password in memory
 	Logger        *log.Logger
-	body          string
 }
 
 func (m *Mailer) String() string {
@@ -124,14 +123,14 @@ func (m *Mailer) getErrorsHtml(errorsStringArray []string) string {
 </html>`, htmlBody)
 }
 
-func (m *Mailer) buildEmail() []byte {
+func (m *Mailer) buildEmail(mailBodyString string) []byte {
 	var buf bytes.Buffer
 
 	buf.WriteString(fmt.Sprintf("From: %s\n", m.Headers.From))
-	buf.WriteString(fmt.Sprintf("To: %s\n", strings.Join(m.Headers.To, ";")))
+	buf.WriteString(fmt.Sprintf("To: %s\n", strings.Join(m.Headers.To, "; ")))
 	buf.WriteString(fmt.Sprintf("Subject: %s\n", m.Headers.Subject))
 	buf.WriteString(fmt.Sprintf("Content-Type: %s\n", m.Headers.ContentType))
-	buf.WriteString(fmt.Sprintf("\n%s", m.body))
+	buf.WriteString(fmt.Sprintf("\n%s", mailBodyString))
 
 	return buf.Bytes()
 
@@ -139,6 +138,7 @@ func (m *Mailer) buildEmail() []byte {
 
 func (m *Mailer) SendHtmlEmail(errors []*error) error {
 	var err error
+	var mailBodyString string
 	var smtpAuth smtp.Auth
 
 	level.Debug(*m.Logger).Log("msg", "send html email with errors")
@@ -151,16 +151,16 @@ func (m *Mailer) SendHtmlEmail(errors []*error) error {
 		smtpAuth = smtp.PlainAuth("", m.MailUser, string(m.passwordRunes), strings.Split(m.SmtpServer, ":")[0])
 	}
 
-	m.body = m.getErrorsBody(errors)
+	mailBodyString = m.getErrorsBody(errors)
 
 	// Prepare message as RFC-822 formatted
-	msg := m.buildEmail()
+	messageBytes := m.buildEmail(mailBodyString)
 
 	level.Debug(*m.Logger).Log("msg", "send email", "server", m.SmtpServer,
 		"from", m.Headers.From, "to", fmt.Sprintf("%+v", m.Headers.To),
-		"value", string(msg))
+		"value", string(messageBytes))
 
-	if err = smtp.SendMail(m.SmtpServer, smtpAuth, m.Headers.From, m.Headers.To, msg); err != nil {
+	if err = smtp.SendMail(m.SmtpServer, smtpAuth, m.Headers.From, m.Headers.To, messageBytes); err != nil {
 		level.Error(*m.Logger).Log("msg", "got error when try to send email", "error", err.Error())
 	}
 

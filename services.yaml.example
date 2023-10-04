@@ -11,7 +11,7 @@ general:
 
 services_list:
 # All service options
-  - process_name: "service1.py"
+  - process_name: "python3 service1.py"
     description: ""
     disabled: false
     start_cmd: "python3 service1.py"
