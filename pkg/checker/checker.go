@@ -69,7 +69,7 @@ func (c *Checker) getProcessInfo(workerId int, chProcPath <-chan string, chResul
 		fstat, err := os.Stat(procPath)
 
 		if err != nil {
-			level.Warn(*c.logger).Log("msg", "process disappeared",
+			level.Debug(*c.logger).Log("msg", "process disappeared",
 				"worker", workerId, "value", procPath, "error", err.Error())
 
 			chResult <- process
@@ -81,7 +81,7 @@ func (c *Checker) getProcessInfo(workerId int, chProcPath <-chan string, chResul
 		f, err := os.Open(fmt.Sprintf("%s/status", procPath))
 
 		if err != nil {
-			level.Warn(*c.logger).Log("msg", "process disappeared",
+			level.Debug(*c.logger).Log("msg", "process disappeared",
 				"worker", workerId, "value", procPath, "error", err.Error())
 
 			chResult <- process
@@ -183,7 +183,7 @@ ReadResults:
 	}
 
 	if len(matches) != len(processesList) {
-		level.Warn(*c.logger).Log("msg", "len(matches) != len(c.processes)",
+		level.Debug(*c.logger).Log("msg", "len(matches) != len(c.processes)",
 			"matches", len(matches), "processes", len(processesList))
 	}
 }
