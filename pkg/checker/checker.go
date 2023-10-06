@@ -72,6 +72,7 @@ func (c *Checker) getProcessInfo(workerId int, chProcPath <-chan string, chResul
 			level.Warn(*c.logger).Log("msg", "process disappeared",
 				"worker", workerId, "value", procPath, "error", err.Error())
 
+			chResult <- process
 			continue
 		}
 
@@ -83,6 +84,7 @@ func (c *Checker) getProcessInfo(workerId int, chProcPath <-chan string, chResul
 			level.Warn(*c.logger).Log("msg", "process disappeared",
 				"worker", workerId, "value", procPath, "error", err.Error())
 
+			chResult <- process
 			continue
 		}
 
@@ -121,6 +123,7 @@ func (c *Checker) getProcessInfo(workerId int, chProcPath <-chan string, chResul
 			level.Debug(*c.logger).Log("msg", "process disappeared",
 				"worker", workerId, "value", procPath, "error", err.Error())
 
+			chResult <- process
 			continue
 		}
 
@@ -164,11 +167,18 @@ func (c *Checker) getProcessesList() {
 	// close channel after write all filepath strings into channel
 	close(chProcPath)
 
+	timer := time.NewTimer(time.Millisecond * 5000)
+	//label outer loop for break it by timer from select-case
+ReadResults:
 	for i := 0; i < len(matches); i++ {
-		process := <-chResult
-
-		if process.Pid != 0 {
-			processesList[process.Pid] = &process
+		select {
+		case process := <-chResult:
+			if process.Pid != 0 {
+				processesList[process.Pid] = &process
+			}
+		case <-timer.C:
+			// stop read buffered channel after timeout
+			break ReadResults
 		}
 	}
 
