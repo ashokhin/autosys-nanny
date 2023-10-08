@@ -51,7 +51,8 @@ Now supports only Linux systems (RedHat, Ubuntu etc.).
 
 > [!WARNING] 
 > Before use create configuration file with services.
-> Example [services.yaml.example](./services.yaml.example)
+
+Example [services.yaml.example](./services.yaml.example)
 
 
 #### Minimal configuration file example:
