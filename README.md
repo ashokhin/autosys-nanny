@@ -50,7 +50,7 @@ Now supports only Linux systems (RedHat, Ubuntu etc.).
 
 
 > [!WARNING] 
-> Before use create configuration file with services.
+> Create a configuration file with services before use.
 
 Example [services.yaml.example](./services.yaml.example)
 
